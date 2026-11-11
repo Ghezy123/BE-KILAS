@@ -1,0 +1,174 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum ReportCategory {
+  kondisi_kampus
+  informasi_penting
+}
+
+enum MediaType {
+  image
+  video
+}
+
+enum NotifType {
+  upvote_milestone
+  pengingat_harian
+}
+
+enum ActivityActionType {
+  buat_laporan
+  ubah_laporan
+  hapus_laporan
+}
+
+enum DevicePlatform {
+  android
+  ios
+}
+
+model User {
+  id             String   @id @default(uuid()) @map("user_id") @db.Char(36)
+  username       String   @unique @db.VarChar(30)
+  email          String   @unique @db.VarChar(120)
+  passwordHash   String   @map("password_hash") @db.VarChar(100)
+  nama           String   @db.VarChar(100)
+  bio            String?  @db.VarChar(300)
+  fotoProfil     String?  @map("foto_profil") @db.VarChar(255)
+  fakultas       String?  @db.VarChar(100)
+  jurusan        String?  @db.VarChar(100)
+  pengingatAktif Boolean  @default(true) @map("pengingat_aktif")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at")
+
+  reports       Report[]
+  upvotes       Upvote[]
+  bookmarks     Bookmark[]
+  notifications Notification[]
+  activityLogs  ActivityLog[]
+  deviceTokens  DeviceToken[]
+
+  @@map("users")
+}
+
+model DeviceToken {
+  id        String         @id @default(uuid()) @map("token_id") @db.Char(36)
+  userId    String         @map("user_id") @db.Char(36)
+  fcmToken  String         @unique @map("fcm_token") @db.VarChar(255)
+  platform  DevicePlatform
+  updatedAt DateTime       @default(now()) @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("device_tokens")
+}
+
+model Report {
+  id           String         @id @default(uuid()) @map("report_id") @db.Char(36)
+  userId       String         @map("user_id") @db.Char(36)
+  category     ReportCategory
+  title        String         @db.VarChar(120)
+  description  String         @db.Text
+  latitude     Decimal        @db.Decimal(9, 6)
+  longitude    Decimal        @db.Decimal(9, 6)
+  locationName String?        @map("location_name") @db.VarChar(150)
+  upvoteCount  Int            @default(0) @map("upvote_count")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  editedAt     DateTime?      @map("edited_at")
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  media         ReportMedia[]
+  upvotes       Upvote[]
+  bookmarks     Bookmark[]
+  notifications Notification[]
+  activityLogs  ActivityLog[]
+
+  @@index([userId, createdAt])
+  @@index([category, createdAt])
+  @@index([createdAt])
+  @@index([upvoteCount])
+  @@map("reports")
+}
+
+model ReportMedia {
+  id        String    @id @default(uuid()) @map("media_id") @db.Char(36)
+  reportId  String    @map("report_id") @db.Char(36)
+  mediaUrl  String    @map("media_url") @db.VarChar(255)
+  mediaType MediaType @map("media_type")
+  sortOrder Int       @default(0) @map("sort_order") @db.TinyInt
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, sortOrder])
+  @@map("report_media")
+}
+
+model Upvote {
+  userId    String   @map("user_id") @db.Char(36)
+  reportId  String   @map("report_id") @db.Char(36)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@id([userId, reportId])
+  @@index([reportId, createdAt])
+  @@map("upvotes")
+}
+
+model Bookmark {
+  userId    String   @map("user_id") @db.Char(36)
+  reportId  String   @map("report_id") @db.Char(36)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@id([userId, reportId])
+  @@index([userId, createdAt])
+  @@index([reportId])
+  @@map("bookmarks")
+}
+
+model Notification {
+  id        String    @id @default(uuid()) @map("notification_id") @db.Char(36)
+  userId    String    @map("user_id") @db.Char(36)
+  type      NotifType
+  title     String    @db.VarChar(120)
+  body      String    @db.Text
+  reportId  String?   @map("report_id") @db.Char(36)
+  isRead    Boolean   @default(false) @map("is_read")
+  dedupeKey String?   @unique @map("dedupe_key") @db.VarChar(120)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report Report? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id          String             @id @default(uuid()) @map("activity_id") @db.Char(36)
+  userId      String             @map("user_id") @db.Char(36)
+  actionType  ActivityActionType @map("action_type")
+  reportId    String?            @map("report_id") @db.Char(36)
+  reportTitle String?            @map("report_title") @db.VarChar(120)
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  report Report? @relation(fields: [reportId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([userId, actionType, createdAt])
+  @@map("activity_logs")
+}

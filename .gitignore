@@ -1,0 +1,31 @@
+# Dokumen tugas (lokal saja)
+file_kebutuhan_tugas/
+
+# Dependencies
+node_modules/
+
+# Environment & rahasia
+.env
+.env.*
+!.env.example
+firebase-service-account.json
+
+# File upload pengguna
+uploads/*
+!uploads/.gitkeep
+!uploads/reports/
+!uploads/avatars/
+uploads/reports/*
+uploads/avatars/*
+!uploads/reports/.gitkeep
+!uploads/avatars/.gitkeep
+
+# Log & hasil tes
+*.log
+coverage/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
