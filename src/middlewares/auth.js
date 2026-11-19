@@ -21,4 +21,26 @@ function requireAuth(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth };
+/**
+ * Autentikasi opsional. Jika token ada dan valid, req.userId terisi.
+ * Jika tidak ada atau tidak valid, req.userId bernilai null dan request tetap lanjut.
+ * Cocok untuk feed publik di mana status upvote/bookmark user aktif disesuaikan jika login.
+ */
+function optionalAuth(req, res, next) {
+  const header = req.get('authorization') ?? '';
+  const [scheme, token] = header.split(' ');
+
+  if (scheme?.toLowerCase() === 'bearer' && token) {
+    try {
+      req.userId = verifyToken(token);
+    } catch {
+      req.userId = null;
+    }
+  } else {
+    req.userId = null;
+  }
+  next();
+}
+
+module.exports = { requireAuth, optionalAuth };
+

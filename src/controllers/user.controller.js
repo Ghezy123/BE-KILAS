@@ -128,8 +128,48 @@ async function getUserByUsername(req, res, next) {
   }
 }
 
+/**
+ * GET /api/users/me/activities
+ * Mengambil riwayat aktivitas pribadi user saat ini (FR-24 & FR-C6).
+ */
+async function getMyActivities(req, res, next) {
+  try {
+    const activities = await prisma.activityLog.findMany({
+      where: { userId: req.userId },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+    });
+
+    const actionMap = {
+      buat_laporan: { type: 'buatLaporan', title: 'Menerbitkan Laporan' },
+      ubah_laporan: { type: 'ubahLaporan', title: 'Memperbarui Laporan' },
+      hapus_laporan: { type: 'hapusLaporan', title: 'Menghapus Laporan' },
+    };
+
+    const mapped = activities.map((a) => {
+      const meta = actionMap[a.actionType] || {
+        type: 'buatLaporan',
+        title: 'Aktivitas Laporan',
+      };
+      return {
+        id: a.id,
+        action_type: meta.type,
+        title: meta.title,
+        description: a.reportTitle || '',
+        timestamp: a.createdAt.toISOString(),
+        report_id: a.reportId,
+      };
+    });
+
+    return ok(res, mapped);
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   searchUsers,
   getUserByUsername,
+  getMyActivities,
 };
 
