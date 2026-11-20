@@ -35,7 +35,23 @@ const reportStorage = multer.diskStorage({
   },
 });
 
+// Sebagian klien (mis. package http Flutter tanpa contentType) mengirim
+// application/octet-stream. Tebak dari ekstensi agar file sah tidak ditolak.
+const MIME_BY_EXTENSION = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.mp4': 'video/mp4',
+  '.mov': 'video/quicktime',
+};
+
 function fileFilter(req, file, cb) {
+  if (file.mimetype.toLowerCase() === 'application/octet-stream') {
+    const guessed = MIME_BY_EXTENSION[path.extname(file.originalname).toLowerCase()];
+    // mimetype diperbarui agar service mengenali foto/video dengan benar.
+    if (guessed) file.mimetype = guessed;
+  }
   if (!ALLOWED_MIME_TYPES.has(file.mimetype.toLowerCase())) {
     return cb(
       AppError.mediaInvalid(

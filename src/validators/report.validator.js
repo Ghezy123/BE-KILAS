@@ -70,16 +70,23 @@ const updateReport = z
     message: 'Tidak ada perubahan yang dikirim',
   });
 
-const getReportsQuery = z.object({
-  category: z.enum(['kondisi_kampus', 'informasi_penting']).optional(),
-  q: z.string().trim().optional(),
-  sort: z.enum(['terbaru', 'terpopuler']).default('terbaru'),
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(50).default(10),
-  user_id: z.string().uuid().optional(),
-  username: z.string().trim().optional(),
-  bookmarked: z.coerce.boolean().optional(),
-});
+const getReportsQuery = z
+  .object({
+    category: z.enum(['kondisi_kampus', 'informasi_penting']).optional(),
+    // Rentang waktu (ISO 8601). Contoh "hari ini" WIB: from=2026-11-19T17:00:00.000Z
+    from: z.coerce.date({ error: 'Format tanggal "from" tidak valid' }).optional(),
+    to: z.coerce.date({ error: 'Format tanggal "to" tidak valid' }).optional(),
+    q: z.string().trim().optional(),
+    sort: z.enum(['terbaru', 'terpopuler']).default('terbaru'),
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(50).default(10),
+    user_id: z.string().uuid().optional(),
+    username: z.string().trim().optional(),
+    bookmarked: z.coerce.boolean().optional(),
+  })
+  .refine((d) => !d.from || !d.to || d.from <= d.to, {
+    message: 'Tanggal "from" harus sebelum "to"',
+  });
 
 module.exports = {
   createReport,

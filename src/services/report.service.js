@@ -246,7 +246,7 @@ async function getReportById(reportId, currentUserId = null) {
  * Mengambil daftar feed laporan (dengan paginasi, pencarian, dan filter).
  */
 async function getReports(query, currentUserId = null) {
-  const { category, q, sort = 'terbaru', page = 1, limit = 10, user_id, username, bookmarked } = query;
+  const { category, q, sort = 'terbaru', page = 1, limit = 10, user_id, username, bookmarked, from, to } = query;
 
   const where = {};
 
@@ -256,6 +256,13 @@ async function getReports(query, currentUserId = null) {
 
   if (user_id) {
     where.userId = user_id;
+  }
+
+  // Filter rentang waktu (hari ini / 7 hari / bulan ini)
+  if (from || to) {
+    where.createdAt = {};
+    if (from) where.createdAt.gte = from;
+    if (to) where.createdAt.lte = to;
   }
 
   if (username) {
