@@ -4,8 +4,21 @@ const validate = require('../middlewares/validate');
 const { requireAuth, optionalAuth } = require('../middlewares/auth');
 const { uploadReportMedia } = require('../middlewares/upload');
 const schemas = require('../validators/report.validator');
+const AppError = require('../utils/AppError');
 
 const router = Router();
+
+/** Edit laporan tidak menerima file: tolak request multipart dengan pesan jelas. */
+function rejectMediaUpload(req, res, next) {
+  if (req.is('multipart/form-data')) {
+    return next(
+      AppError.mediaInvalid(
+        'Media laporan tidak dapat diubah. Hapus laporan lalu buat ulang untuk mengganti media',
+      ),
+    );
+  }
+  next();
+}
 
 // GET /api/reports - Feed laporan dengan filter, sortir, dan paginasi
 router.get('/', optionalAuth, validate({ query: schemas.getReportsQuery }), controller.getReports);
@@ -27,10 +40,12 @@ router.post(
 );
 
 // PUT /api/reports/:id - Edit laporan sendiri maks. 24 jam (FR-A2)
+// Hanya judul, keterangan, dan kategori (JSON). Media tidak dapat diubah:
+// foto/video adalah bukti laporan; untuk mengganti media, hapus laporan lalu buat ulang.
 router.put(
   '/:id',
   requireAuth,
-  uploadReportMedia,
+  rejectMediaUpload,
   validate({ body: schemas.updateReport }),
   controller.updateReport,
 );

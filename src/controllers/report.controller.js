@@ -14,12 +14,7 @@ async function createReport(req, res, next) {
 async function updateReport(req, res, next) {
   try {
     const data = req.validated?.body || req.body;
-    const report = await reportService.updateReport(
-      req.userId,
-      req.params.id,
-      data,
-      req.files,
-    );
+    const report = await reportService.updateReport(req.userId, req.params.id, data);
     return ok(res, report);
   } catch (err) {
     return next(err);

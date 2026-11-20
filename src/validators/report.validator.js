@@ -49,36 +49,26 @@ const createReport = z.object({
     .nullable(),
 });
 
-const updateReport = z.object({
-  category: categorySchema.optional(),
-  title: z
-    .string()
-    .trim()
-    .min(3, 'Judul minimal 3 karakter')
-    .max(120, 'Judul maksimal 120 karakter')
-    .optional(),
-  description: z
-    .string()
-    .trim()
-    .min(5, 'Keterangan minimal 5 karakter')
-    .max(1500, 'Keterangan maksimal 1500 karakter')
-    .optional(),
-  kept_media_ids: z
-    .union([z.string(), z.array(z.string())])
-    .optional()
-    .transform((val) => {
-      if (!val) return [];
-      if (Array.isArray(val)) return val;
-      try {
-        const parsed = JSON.parse(val);
-        if (Array.isArray(parsed)) return parsed.map(String);
-      } catch {
-        // Jika dipisahkan koma
-        return val.split(',').map((s) => s.trim()).filter(Boolean);
-      }
-      return [];
-    }),
-});
+// Edit laporan: hanya teks & kategori. Media tidak dapat diubah setelah laporan dibuat.
+const updateReport = z
+  .object({
+    category: categorySchema.optional(),
+    title: z
+      .string()
+      .trim()
+      .min(3, 'Judul minimal 3 karakter')
+      .max(120, 'Judul maksimal 120 karakter')
+      .optional(),
+    description: z
+      .string()
+      .trim()
+      .min(5, 'Keterangan minimal 5 karakter')
+      .max(1500, 'Keterangan maksimal 1500 karakter')
+      .optional(),
+  })
+  .refine((d) => d.title !== undefined || d.description !== undefined || d.category !== undefined, {
+    message: 'Tidak ada perubahan yang dikirim',
+  });
 
 const getReportsQuery = z.object({
   category: z.enum(['kondisi_kampus', 'informasi_penting']).optional(),

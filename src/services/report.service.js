@@ -119,107 +119,39 @@ async function createReport(userId, data, files = []) {
 
 /**
  * FR-A2: Mengubah laporan sendiri (maksimal 24 jam setelah dibuat).
+ *
+ * Hanya judul, keterangan, dan kategori. Media TIDAK dapat diubah: foto/video
+ * adalah bukti laporan (mencegah media ditukar setelah mendapat upvote).
+ * Untuk mengganti media, pengguna menghapus laporan lalu membuat ulang.
  */
-async function updateReport(userId, reportId, data, newFiles = []) {
+async function updateReport(userId, reportId, data) {
   const existing = await prisma.report.findUnique({
     where: { id: reportId },
-    include: {
-      media: true,
-      user: true,
-    },
+    select: { id: true, userId: true, createdAt: true },
   });
 
   if (!existing) {
-    await Promise.all((newFiles || []).map((f) => removeLocalFile(f.filename)));
     throw AppError.notFound('Laporan tidak ditemukan');
   }
 
   // Cek kepemilikan
   if (existing.userId !== userId) {
-    await Promise.all((newFiles || []).map((f) => removeLocalFile(f.filename)));
     throw AppError.forbidden('Kamu hanya bisa mengubah laporan milikmu sendiri');
   }
 
   // Cek jendela waktu 24 jam
-  const diffMs = Date.now() - new Date(existing.createdAt).getTime();
-  const diffHours = diffMs / (1000 * 60 * 60);
+  const diffHours = (Date.now() - new Date(existing.createdAt).getTime()) / (1000 * 60 * 60);
   if (diffHours > 24) {
-    await Promise.all((newFiles || []).map((f) => removeLocalFile(f.filename)));
     throw AppError.editWindowExpired(
       'Batas waktu edit (24 jam) untuk laporan ini telah berakhir',
     );
   }
 
-  // Validasi komposisi media yang dipertahankan + media baru
-  const keptIds = new Set(data.kept_media_ids || []);
-  const keptMedia = existing.media.filter((m) => keptIds.has(m.id));
-  const removedMedia = existing.media.filter((m) => !keptIds.has(m.id));
-
-  // Jika tidak mengirim kept_media_ids dan tidak upload file baru, pertahankan semua
-  const isUpdatingMedia = (data.kept_media_ids && data.kept_media_ids.length > 0) || newFiles.length > 0;
-  const finalMediaKept = isUpdatingMedia ? keptMedia : existing.media;
-  const finalMediaToRemove = isUpdatingMedia ? removedMedia : [];
-
-  const totalCount = finalMediaKept.length + newFiles.length;
-  if (totalCount < 1) {
-    await Promise.all(newFiles.map((f) => removeLocalFile(f.filename)));
-    throw AppError.mediaInvalid('Laporan harus memiliki minimal satu foto atau video');
-  }
-  if (totalCount > 5) {
-    await Promise.all(newFiles.map((f) => removeLocalFile(f.filename)));
-    throw AppError.mediaInvalid('Maksimal 5 media per laporan');
-  }
-
-  const keptVideoCount = finalMediaKept.filter((m) => m.mediaType === 'video').length;
-  const newVideoCount = newFiles.filter((f) => f.mimetype.toLowerCase().startsWith('video/')).length;
-  if (keptVideoCount + newVideoCount > 1) {
-    await Promise.all(newFiles.map((f) => removeLocalFile(f.filename)));
-    throw AppError.mediaInvalid('Hanya boleh maksimal 1 video per laporan');
-  }
-
-  for (const file of newFiles) {
-    const isVideo = file.mimetype.toLowerCase().startsWith('video/');
-    if (!isVideo && file.size > 5 * 1024 * 1024) {
-      await Promise.all(newFiles.map((f) => removeLocalFile(f.filename)));
-      throw AppError.mediaInvalid(`Ukuran foto "${file.originalname}" melebihi batas 5MB`);
-    }
-    if (isVideo && file.size > 25 * 1024 * 1024) {
-      await Promise.all(newFiles.map((f) => removeLocalFile(f.filename)));
-      throw AppError.mediaInvalid(`Ukuran video "${file.originalname}" melebihi batas 25MB`);
-    }
-  }
-
-  // Update dalam transaksi database
   const updated = await prisma.$transaction(async (tx) => {
-    // 1. Hapus media yang dibuang
-    if (finalMediaToRemove.length > 0) {
-      const idsToRemove = finalMediaToRemove.map((m) => m.id);
-      await tx.reportMedia.deleteMany({
-        where: { id: { in: idsToRemove } },
-      });
-    }
-
-    // 2. Tambahkan media baru dengan nomor urut berikutnya
-    if (newFiles.length > 0) {
-      let nextSortOrder = finalMediaKept.length;
-      const newMediaRecords = newFiles.map((file) => ({
-        reportId,
-        mediaUrl: `reports/${file.filename}`,
-        mediaType: file.mimetype.toLowerCase().startsWith('video/') ? 'video' : 'image',
-        sortOrder: nextSortOrder++,
-      }));
-      await tx.reportMedia.createMany({
-        data: newMediaRecords,
-      });
-    }
-
-    // 3. Update report dengan editedAt = waktu sekarang
-    const reportData = {
-      editedAt: new Date(),
-    };
-    if (data.title) reportData.title = data.title;
-    if (data.description) reportData.description = data.description;
-    if (data.category) reportData.category = data.category;
+    const reportData = { editedAt: new Date() };
+    if (data.title !== undefined) reportData.title = data.title;
+    if (data.description !== undefined) reportData.description = data.description;
+    if (data.category !== undefined) reportData.category = data.category;
 
     const res = await tx.report.update({
       where: { id: reportId },
@@ -232,7 +164,7 @@ async function updateReport(userId, reportId, data, newFiles = []) {
       },
     });
 
-    // 4. Catat log aktivitas (FR-24)
+    // Catat log aktivitas (FR-24)
     await tx.activityLog.create({
       data: {
         userId,
@@ -244,9 +176,6 @@ async function updateReport(userId, reportId, data, newFiles = []) {
 
     return res;
   });
-
-  // Hapus berkas fisik yang dibuang dari harddisk
-  await Promise.all(finalMediaToRemove.map((m) => removeLocalFile(m.mediaUrl)));
 
   return toReportResponse(updated, userId);
 }
